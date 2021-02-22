@@ -21,12 +21,10 @@ use crate::traits::multitask::{JuliaTask, ReturnChannel};
 use crate::value::module::Module;
 use crate::value::Value;
 use crate::{INIT, JLRS_JL};
-use async_std::channel::{
-    bounded, Receiver as AsyncStdReceiver, RecvError, Sender as AsyncStdSender, TrySendError,
-};
-use async_std::future::timeout;
-use async_std::sync::{Condvar as AsyncStdCondvar, Mutex as AsyncStdMutex};
-use async_std::task::{self, JoinHandle as AsyncStdHandle};
+use async_channel:: {bounded, Sender as AsyncStdSender, Receiver as AsyncStdReceiver, TrySendError};
+use tokio::task::{self, JoinHandle as AsyncStdHandle};
+use tokio::time::timeout;
+use tokio::sync::{Notify as AsyncStdCondvar, Mutex as AsyncStdMutex};
 use jl_sys::{jl_atexit_hook, jl_gc_safepoint, jl_init_with_image__threading, jl_is_initialized};
 use std::ffi::{c_void, CString};
 use std::io::{Error as IOError, ErrorKind};
@@ -37,7 +35,7 @@ use std::thread::{self, JoinHandle as ThreadHandle};
 use std::time::Duration;
 
 /// A handle to the async runtime. It can be used to include files and create new tasks. The
-/// runtime shuts down when the last handle is dropped. The two generic type parameters `T`
+// runtime shuts down when the last handle is dropped. The two generic type parameters `T`
 /// and `R` are the return type and return channel type respectively, which must be the same across
 /// all different implementations of [`JuliaTask`] that you use.
 ///
@@ -537,7 +535,7 @@ where
     P: AsRef<Path>,
     Q: AsRef<Path>,
 {
-    task::block_on(async {
+    task::block_in_place(|| async {
         let mut mt_stack: MultitaskStack<T, R> = unsafe {
             if jl_is_initialized() != 0 || INIT.swap(true, Ordering::SeqCst) {
                 return Err(JlrsError::AlreadyInitialized.into());
